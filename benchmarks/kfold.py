@@ -84,7 +84,9 @@ if __name__ == "__main__":
         else None
     )
 
-    feature_fusion_methods = ALL_FEATURES_FUSIONS if args.all else [args.fusion]
+    feature_fusion_methods = (
+        [None] + ALL_FEATURES_FUSIONS if args.all else [args.fusion]
+    )
     for _comb_method in feature_fusion_methods:
         _preprocessing = "sentence" if _comb_method == "metablock" else "one_hot"
 
