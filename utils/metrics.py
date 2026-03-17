@@ -40,7 +40,7 @@ def compute_metrics_from_csv(
                     Path to the CSV file.
     stage_filter : str
                     Filter rows by stage value before computing metrics (e.g., "val").
-                    
+
     """
 
     csv_path = Path(csv_path)
@@ -65,9 +65,12 @@ def compute_metrics_from_csv(
 
     return compute_metrics(df)
 
+
 def compute_metrics(
     df: pd.DataFrame,
-) -> Tuple[Dict[str, float], pd.DataFrame, np.ndarray, List[str]]:
+) -> Tuple[
+    Dict[str, float], pd.DataFrame, np.ndarray, np.ndarray, np.ndarray, List[str]
+]:
     """
     Compute multiclass metrics from a DataFrame containing true labels and predicted probabilities.
 
@@ -128,16 +131,8 @@ def compute_metrics(
         f1_score(y_true, y_pred, average="macro", zero_division=0)
     )
 
-    # Per-class metrics
     labels_idx = np.arange(n_classes)
-    per_prec = precision_score(
-        y_true, y_pred, average=None, labels=labels_idx, zero_division=0
-    )
-    per_rec = recall_score(y_true, y_pred, average=None, labels=labels_idx)
-    per_f1 = f1_score(y_true, y_pred, average=None, labels=labels_idx, zero_division=0)
-    support = np.bincount(y_true, minlength=n_classes)
 
-    # Specificity per class from confusion matrix
     cm = confusion_matrix(y_true, y_pred, labels=labels_idx)
     per_spec = np.zeros(n_classes, dtype=float)
     total = cm.sum()
@@ -150,7 +145,6 @@ def compute_metrics(
         per_spec[i] = float(tn / denom) if denom > 0 else np.nan
     overall["specificity_macro"] = float(np.nanmean(per_spec))
 
-    # AUC (macro and per class) with one-versus-rest (OVR)
     try:
         per_auc = roc_auc_score(
             y_true,
@@ -165,44 +159,30 @@ def compute_metrics(
         per_auc = np.full(n_classes, np.nan, dtype=float)
         overall["auc_macro"] = float("nan")
 
-    per_class_df = pd.DataFrame(
-        {
-            "class": class_names,
-            "precision": per_prec,
-            "recall": per_rec,
-            "specificity": per_spec,
-            "f1": per_f1,
-            "auc": per_auc,
-            "support": support,
-        }
-    ).set_index("class")
-
-    return overall, per_class_df, y_true, y_pred, labels_idx, class_names
+    return overall, y_true, y_pred, labels_idx, class_names
 
 
 def aggregate_results(
     results_root: Union[str, Path],
-    stage_filter: Optional[Union[str, Sequence[str]]] = None,
+    stage_filter: Optional[Union[str, Sequence[str]]] = "val",
     csv_name: str = "best_checkpoint_preds.csv",
     save: bool = True,
     timestamp_dir: str = None,
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Iterate a results directory structured as:
                     <results_root>/<timestamp>/<comb_method>/<cnn_backbone>/<folder_x>/<csv_name>
 
-    Compute metrics per folder using compute_metrics_from_csv and aggregate across folds
+    Compute metrics aggregated across folds
     per (timestamp, comb_method, backbone).
 
     Returns three DataFrames:
                     - folds_df: one row per (timestamp, method, backbone, folder)
                     - overall_agg_df: aggregated macro metrics (mean, std) per (timestamp, method, backbone)
-                    - per_class_agg_df: aggregated per-class metrics (mean, std) per (timestamp, method, backbone, class)
 
     If save=True, writes:
                     <results_root>/<timestamp>/<comb_method>/<cnn_backbone>/metrics_folds.csv
                     <results_root>/<timestamp>/<comb_method>/<cnn_backbone>/metrics_overall_agg.csv
-                    <results_root>/<timestamp>/<comb_method>/<cnn_backbone>/metrics_per_class_agg.csv
     """
 
     results_root = Path(results_root)
@@ -210,7 +190,6 @@ def aggregate_results(
         raise FileNotFoundError(f"Results root not found: {results_root}")
 
     fold_rows = []
-    per_class_rows = []
 
     # Walk the tree: timestamp/comb/backbone/folder_x
     timestamp_dir = results_root / timestamp_dir
@@ -236,7 +215,7 @@ def aggregate_results(
                 if not csv_path.exists():
                     continue
 
-                overall, per_class, y_true, y_pred, labels_idx, class_names = (
+                overall, y_true, y_pred, labels_idx, class_names = (
                     compute_metrics_from_csv(csv_path, stage_filter=stage_filter)
                 )
 
@@ -261,31 +240,11 @@ def aggregate_results(
                 }
                 fold_rows.append(row)
 
-                # Per-class metrics rows
-                for cls, vals in per_class.iterrows():
-                    per_class_rows.append(
-                        {
-                            "timestamp": timestamp_dir.name,
-                            "method": method_dir.name,
-                            "backbone": backbone_dir.name,
-                            "folder": fold_dir.name,
-                            "class": cls,
-                            **vals.to_dict(),
-                        }
-                    )
-
             # After iterating folds, if saving, write summaries for this (timestamp, method, backbone)
             if save:
                 combo_fold_rows = [
                     r
                     for r in fold_rows
-                    if r.get("timestamp") == timestamp_dir.name
-                    and r.get("method") == method_dir.name
-                    and r.get("backbone") == backbone_dir.name
-                ]
-                combo_per_class_rows = [
-                    r
-                    for r in per_class_rows
                     if r.get("timestamp") == timestamp_dir.name
                     and r.get("method") == method_dir.name
                     and r.get("backbone") == backbone_dir.name
@@ -317,40 +276,6 @@ def aggregate_results(
                         overall_agg[f"{m}_std"] = agg_std.get(m, np.nan)
                     overall_agg.to_csv(
                         backbone_dir / "metrics_overall_agg.csv", index=False
-                    )
-
-                if combo_per_class_rows:
-                    per_class_df_combo = pd.DataFrame(combo_per_class_rows)
-
-                    # Aggregate per-class metrics per combo (mean, std across folds)
-                    metric_cols_pc = [
-                        c
-                        for c in [
-                            "precision",
-                            "recall",
-                            "specificity",
-                            "f1",
-                            "auc",
-                            "support",
-                        ]
-                        if c in per_class_df_combo.columns
-                    ]
-                    grouped = per_class_df_combo.groupby(["class"], as_index=False)
-                    mean_df = grouped[metric_cols_pc].mean(numeric_only=True)
-                    std_df = grouped[metric_cols_pc].std(numeric_only=True)
-
-                    # Merge mean and std with suffixes
-                    per_class_agg = mean_df.copy()
-                    for m in metric_cols_pc:
-                        per_class_agg.rename(columns={m: f"{m}_mean"}, inplace=True)
-                        per_class_agg[f"{m}_std"] = std_df[m]
-
-                    # Add identifiers
-                    per_class_agg.insert(0, "backbone", backbone_dir.name)
-                    per_class_agg.insert(0, "method", method_dir.name)
-                    per_class_agg.insert(0, "timestamp", timestamp_dir.name)
-                    per_class_agg.to_csv(
-                        backbone_dir / "metrics_per_class_agg.csv", index=False
                     )
 
             # Plot and save aggregated confusion matrix ---
@@ -393,28 +318,7 @@ def aggregate_results(
     else:
         overall_agg_df = pd.DataFrame()
 
-    # per-class aggregated across folds
-    per_class_df_all = pd.DataFrame(per_class_rows)
-    if not per_class_df_all.empty:
-        id_cols_pc = ["timestamp", "method", "backbone", "class"]
-        metric_cols_pc = [
-            c
-            for c in ["precision", "recall", "specificity", "f1", "auc", "support"]
-            if c in per_class_df_all.columns
-        ]
-
-        per_class_agg_df = per_class_df_all.groupby(id_cols_pc)[metric_cols_pc].agg(
-            ["mean", "std"]
-        )
-
-        per_class_agg_df.columns = [
-            f"{m}_{stat}" for m, stat in per_class_agg_df.columns
-        ]
-        per_class_agg_df = per_class_agg_df.reset_index()
-    else:
-        per_class_agg_df = pd.DataFrame()
-
-    return folds_df, overall_agg_df, per_class_agg_df
+    return folds_df, overall_agg_df
 
 
 def plot_and_save_confusion_matrix(
@@ -620,116 +524,6 @@ def generate_latex_macro_table(
     return latex_str
 
 
-def generate_latex_per_class_table(
-    per_class_agg_df: pd.DataFrame,
-    out_dir: Union[str, Path],
-    timestamp: Optional[str] = None,
-    metric: str = "f1",
-    method_order: Optional[List[str]] = None,
-    backbone_order: Optional[List[str]] = None,
-    class_order: Optional[List[str]] = None,
-    method_title_map: Optional[Dict[str, str]] = None,
-    caption_prefix: str = "Per-class performance",
-    label_prefix: str = "tab:perclass",
-) -> str:
-    """
-    Build a LaTeX table for a single aggregated per-class metric, grouped by method.
-    """
-    df = per_class_agg_df.copy()
-    if df.empty:
-        print("Warning: per_class_agg_df is empty. Cannot generate LaTeX table.")
-        return ""
-
-    # Data filtering
-    if timestamp is not None:
-        df = df[df["timestamp"] == timestamp]
-    else:
-        unique_ts = sorted(df["timestamp"].unique())
-        if len(unique_ts) > 1:
-            ts = unique_ts[-1]
-            df = df[df["timestamp"] == ts]
-            print(f"Multiple timestamps found. Using latest for table: {ts}")
-
-    if df.empty:
-        print(
-            f"Warning: No data found for the selected timestamp. Cannot generate table."
-        )
-        return ""
-
-    if method_title_map is None:
-        method_title_map = MODEL_DISPLAY_NAMES
-
-    methods = [
-        "no_metadata",
-        "naivebayes",
-        "cross-attention",
-        "remixformer",
-        "bayesiannetwork",
-        "metablock-se",
-    ]
-    backbones = (
-        backbone_order
-        if backbone_order is not None
-        else sorted(list(df["backbone"].unique()))
-    )
-    classes = (
-        class_order if class_order is not None else sorted(list(df["class"].unique()))
-    )
-
-    # LaTeX string building
-    ncols = 1 + len(classes)
-    lines: List[str] = []
-    lines.append("\\begin{table}[htb]")
-    lines.append(f"\\caption{{{caption_prefix} ({_latex_escape(metric)})}}")
-    lines.append(f"\\label{{{label_prefix}:{metric}}}")
-    lines.append("\\centering")
-    lines.append(f"\\begin{{tabular}}{{{'|l|' + 'c' * len(classes) + '|'}}}")
-    lines.append("\\hline")
-
-    for i, method in enumerate(methods):
-        df_m = df[df["method"] == method]
-        if df_m.empty:
-            continue
-
-        if i > 0:
-            lines.append("\\hline")
-
-        title = _latex_escape(method_title_map.get(method, method))
-        lines.append(f"\\multicolumn{{{ncols}}}{{c}}{{\\textbf{{{title}}}}} \\\\")
-        lines.append("\\hline")
-
-        header = ["\\textbf{Model}"] + [
-            f"\\textbf{{{_latex_escape(c)}}}" for c in classes
-        ]
-        lines.append(" & ".join(header) + " \\\\")
-        lines.append("\\hline")
-
-        for backbone in backbones:
-            row_cells = [_latex_escape(backbone)]
-            for cls in classes:
-                row_df = df_m[(df_m["backbone"] == backbone) & (df_m["class"] == cls)]
-                if row_df.empty:
-                    row_cells.append("-")
-                else:
-                    r = row_df.iloc[0]
-                    mean_val = r.get(f"{metric}_mean")
-                    std_val = r.get(f"{metric}_std")
-                    row_cells.append(_fmt_mean_std(mean_val, std_val))
-            lines.append(" & ".join(row_cells) + " \\\\")
-        lines.append("\\hline")
-
-    lines.append("\\end{tabular}")
-    lines.append("\\end{table}")
-
-    latex_str = "\n".join(lines)
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / f"latex_per_class_{metric}.tex"
-    out_file.write_text(latex_str)
-    print(f"LaTeX per-class table for '{metric}' saved to {out_file}")
-    return latex_str
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Compute and aggregate metrics from benchmark results, then generate LaTeX tables."
@@ -752,7 +546,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     try:
-        folds_df, overall_agg_df, per_class_agg_df = aggregate_results(
+        folds_df, overall_agg_df = aggregate_results(
             f"benchmarks/{args.benchmark.value}/results",
             timestamp_dir=args.t,
             stage_filter=args.stage_filter,
@@ -769,15 +563,6 @@ if __name__ == "__main__":
                 caption="Aggregated macro metrics across all folds.",
                 label="tab:agg_macro_metrics",
             )
-
-        if not per_class_agg_df.empty:
-            for metric in ["f1", "recall", "precision", "specificity", "auc"]:
-                generate_latex_per_class_table(
-                    per_class_agg_df,
-                    out_dir=latex_out_dir,
-                    metric=metric,
-                    caption_prefix=f'Per-class {metric.replace("_", " ").title()}',
-                )
 
     except FileNotFoundError as e:
         print(

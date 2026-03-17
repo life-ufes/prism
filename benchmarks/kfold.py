@@ -8,8 +8,7 @@ from benchmarks.benchmarks import BenchmarksFactory, Benchmarks
 from utils.statistical import run_statistical_tests
 from utils.metrics import (
     aggregate_results,
-    generate_latex_macro_table,
-    generate_latex_per_class_table,
+    generate_latex_macro_table
 )
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -137,7 +136,7 @@ if __name__ == "__main__":
                 }
                 experiment.run(config_updates=config)
 
-    folds_df, overall_agg_df, per_class_agg_df = aggregate_results(
+    folds_df, overall_agg_df = aggregate_results(
         _results_dir, timestamp_dir=_version, stage_filter="val", save=True
     )
 
@@ -156,12 +155,3 @@ if __name__ == "__main__":
             caption="Aggregated macro metrics across all folds.",
             label="tab:agg_macro_metrics",
         )
-
-    if not per_class_agg_df.empty:
-        for metric in ["f1", "recall", "precision", "specificity", "auc"]:
-            generate_latex_per_class_table(
-                per_class_agg_df,
-                out_dir=_results_dir / _version,
-                metric=metric,
-                caption_prefix=f'Per-class {metric.replace("_", " ").title()}',
-            )
