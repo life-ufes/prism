@@ -1,4 +1,6 @@
 from pathlib import Path
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 ROOT = Path('.')
 BENCHMARKS = ROOT / 'benchmarks'
@@ -6,7 +8,7 @@ BENCHMARKS = ROOT / 'benchmarks'
 ##################################################################################################################
 # PAD-20
 PAD_20_BENCHMARK = BENCHMARKS / 'pad20'
-PAD_20_PATH = Path("/data/PAD-UFES-20/")
+PAD_20_PATH = Path("/home/pedrobouzon/life/datasets/pad-ufes-20")
 PAD_20_IMAGES_FOLDER = PAD_20_PATH / "images"
 PAD_20_ONE_HOT_ENCODED = PAD_20_BENCHMARK / 'data' / "pad-ufes-20-one-hot.csv"
 PAD_20_RAW_METADATA = PAD_20_PATH / "metadata.csv"
