@@ -278,7 +278,7 @@ def main(
     metrics_saver = TestMetricSaver()
 
     # for the naive bayes, we just load the backbone and do not further train it
-    max_epochs = 0 if _checkpoint_backbone is not None else _epochs
+    max_epochs = 0 if _comb_method == "naive_bayes" else _epochs
 
     # define a trainer with early stopping based on loss and save the results
     trainer = L.Trainer(
