@@ -42,3 +42,36 @@ MODEL_DISPLAY_NAMES = {
   'no_metadata': 'No Metadata',
   'remixformer': 'Cross Modality Fusion',
 }
+
+METRIC_NAMES = {
+  'recall': 'Balanced Accuracy',
+  'balanced_accuracy': 'BACC',
+  'f1_macro': 'F1-Score',
+  'specificity_macro': 'Specificity',
+  'auc_macro': 'AUC',
+  'precison_macro': 'Precision'
+}
+
+FIELD_TO_LABEL = {
+    "age": "Age",
+    "gender": "Gender",
+    "background_mother": "Maternal ancestry",
+    "background_father": "Paternal ancestry",
+    "has_piped_water": "Access to piped water",
+    "has_sewage_system": "Access to sewer system",
+    "drink": "Drink",
+    "smoke": "Smoke",
+    "pesticide": "Pesticide exposure",
+    "fitspatrick": "Fitzpatrick scale",
+    "skin_cancer_history": "Family skin cancer history",
+    "cancer_history": "Family any cancer history",
+    "region": "Lesion region",
+    "grew": "Lesion grew",
+    "itch": "Lesion itch",
+    "bleed": "Lesion bled",
+    "hurt": "Lesion hurt",
+    "changed": "Lesion changed",
+    "elevation": "Lesion elevation",
+    "diameter_1": "First diameter (mm)",
+    "diameter_2": "Second diameter (mm)",
+}

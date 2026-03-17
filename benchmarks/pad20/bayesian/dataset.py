@@ -24,9 +24,7 @@ class PAD20(Dataset):
         "SCC",
     ]
 
-    def __init__(
-        self, metadata: pd.DataFrame, image_folder=None, stage="train", features=None
-    ):
+    def __init__(self, metadata: pd.DataFrame, stage="train", features=None):
         super().__init__()
         self.metadata = metadata
         self.metadata = self.metadata[self.metadata["stage"] == stage]
@@ -55,3 +53,27 @@ class PAD20(Dataset):
             torch.tensor(row.loc[self.features].to_numpy(dtype=np.float32)),
             torch.tensor(row.loc["diagnostic_number"], dtype=torch.long),
         )
+
+
+class MaskedMetadataPAD20Bayesian(Dataset):
+    """A wrapper dataset to serve data for Bayesian models with a subset of features."""
+
+    def __init__(self, original_dataset: PAD20, features: list):
+        self.original_dataset = original_dataset
+
+        self.meta = self.original_dataset.metadata.copy()
+        self.meta.loc[:, list(set(PAD20.FEATURES) - set(features))] = np.nan
+
+    def __len__(self):
+        return len(self.original_dataset)
+
+    def __getitem__(self, index):
+        row = self.meta.iloc[index]
+        return (
+            row["img_id"],
+            torch.tensor(row.loc[PAD20.FEATURES].to_numpy(dtype=np.float32)),
+            torch.tensor(row.loc["diagnostic_number"], dtype=torch.long),
+        )
+
+    def to_label(self, diagnostic_number):
+        return self.original_dataset.to_label(diagnostic_number)

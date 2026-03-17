@@ -1,11 +1,14 @@
 import torch
 import config
+import numpy as np
 import pandas as pd
+
 from torchvision.transforms import ToTensor
 from torch.utils.data import Dataset
-from pathlib import Path
-import numpy as np
+
 from PIL import Image
+from pathlib import Path
+from utils.names import FIELD_TO_LABEL
 
 
 class PAD20(Dataset):
@@ -176,6 +179,56 @@ class PAD20(Dataset):
         return image, self.meta[index], self.targets[index], Path(img_path).stem
 
 
+class MaskedMetadataPAD20(Dataset):
+    """A wrapper dataset to serve images with a masked subset of metadata."""
+
+    def __init__(
+        self,
+        original_dataset: PAD20,
+        feature_indices: list,
+        total_features: int,
+        all_meta_features: list,
+    ):
+        self.original_dataset = original_dataset
+
+        # Create a masked metadata tensor
+        original_meta = self.original_dataset.meta
+
+        # Initialize with 0s.
+        self.masked_meta = torch.zeros(
+            (len(original_meta), total_features), dtype=original_meta.dtype
+        )
+
+        # Copy only the selected features using their indices
+        if feature_indices:
+            self.masked_meta[:, feature_indices] = original_meta[:, feature_indices]
+
+        # Handle specific missing value encodings
+        missing_indices = set(range(total_features)) - set(feature_indices)
+        for idx in missing_indices:
+            col_name = all_meta_features[idx]
+
+            # If a missing categorical feature has an _UNK column, activate it
+            if col_name.endswith("_UNK"):
+                self.masked_meta[:, idx] = 1.0
+
+            # If a missing feature is numerical, set it to -1
+            elif col_name in PAD20.NUMERICAL_FEATURES:
+                self.masked_meta[:, idx] = -1
+
+        if len(feature_indices) == total_features:
+            assert torch.all(
+                self.masked_meta == original_meta
+            ), "Masked metadata should match original when all features are included."
+
+    def __len__(self):
+        return len(self.original_dataset)
+
+    def __getitem__(self, index):
+        img, _, target, img_id = self.original_dataset[index]
+        return img, self.masked_meta[index], target, img_id
+
+
 class PAD20SentenceEmbedding(PAD20):
 
     def __init__(self, df, sentence_model, transforms=ToTensor()):
@@ -187,3 +240,74 @@ class PAD20SentenceEmbedding(PAD20):
         return self.sentence_model.encode(
             df["sentence"].values, show_progress_bar=False
         )
+
+
+class MaskedMetadataPAD20SentenceEmbedding(PAD20):
+    """A wrapper dataset to serve images with a masked subset of metadata."""
+
+    def __init__(self, df, sentence_model, features: list, transforms=ToTensor()):
+        super().__init__(df, transforms, [])
+        self.sentence_model = sentence_model
+
+        # Determine which features need to be masked
+        to_mask = list(
+            set(PAD20.RAW_CATEGORICAL_FEATURES + PAD20.NUMERICAL_FEATURES)
+            - set(features)
+        )
+
+        # Apply the masking function
+        sentence = df["sentence"].apply(self.mask_features_in_string, to_mask=to_mask)
+
+        self.meta = self.get_metadata(sentence)
+
+    def mask_features_in_string(self, sentence, to_mask):
+        """
+        Replaces the values of specific key-value pairs in the patient history string with 'unknown'.
+        """
+        # Normalize the 'to_mask' list to be lowercase
+        to_mask_lower = [FIELD_TO_LABEL[item].lower() for item in to_mask]
+
+        # Extract the prefix and the features string
+        prefix = "Patient History: "
+        if not sentence.startswith(prefix):
+            raise ValueError(
+                "Invalid format: the string must start with 'Patient History:'"
+            )
+
+        # Handle the trailing period safely
+        ends_with_period = sentence.endswith(".")
+        features_part = (
+            sentence[len(prefix) : -1] if ends_with_period else sentence[len(prefix) :]
+        )
+
+        # Split features into a list
+        features_list = features_part.split(", ")
+
+        # Iterate and mask the targeted features
+        masked_features = []
+        for feature in features_list:
+            # Split the feature into Key and Value (e.g., ["Age", " 50"])
+            parts = feature.split(":", 1)
+
+            if len(parts) < 2:
+                raise ValueError(f"Found a malformed sentence: {sentence}. ('{parts}')")
+
+            feature_key = parts[0].strip()
+
+            # Check if this key's lowercase version is in the mask list
+            if feature_key.lower() in to_mask_lower:
+                # Replace the original value with "unknown"
+                masked_features.append(f"{feature_key}: unknown")
+            else:
+                # Keep the original feature intact
+                masked_features.append(feature)
+
+        # Rejoin the features and reconstruct the sentence
+        result = prefix + ", ".join(masked_features)
+        if ends_with_period:
+            result += "."
+
+        return result
+
+    def get_metadata(self, sentences: pd.Series):
+        return self.sentence_model.encode(sentences.values, show_progress_bar=False)

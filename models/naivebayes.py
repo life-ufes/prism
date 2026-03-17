@@ -1,4 +1,5 @@
 import os
+from typing import List
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -35,10 +36,10 @@ class NaiveBayes(nn.Module):
 
         # Feature index buffers
         self.register_buffer(
-            "numerical_features", torch.zeros(n_numerical_features, dtype=torch.long)
+            "numerical_features_indexes", torch.zeros(n_numerical_features, dtype=torch.long)
         )
         self.register_buffer(
-            "categorical_features",
+            "categorical_features_indexes",
             torch.zeros(n_categorical_features, dtype=torch.long),
         )
 
@@ -61,16 +62,16 @@ class NaiveBayes(nn.Module):
     @torch.no_grad()
     def fit(
         self,
-        metadata,
-        labels,
-        categorical_features,
-        numerical_features,
-        n_classes,
-        weights=None,
+        metadata: torch.Tensor,
+        labels: torch.Tensor,
+        categorical_features_indexes: List[int],
+        numerical_features_indexes: List[int],
+        n_classes: int,
+        weights: torch.Tensor=None,
     ):
         """Fit NB statistics on provided metadata/labels.
 
-        categorical_features and numerical_features should be lists/arrays of column indices.
+        categorical_features_indexes and numerical_features_indexes should be lists/arrays of column indices.
         """
         # Convert to tensors on a consistent device
         if not isinstance(metadata, torch.Tensor):
@@ -84,15 +85,15 @@ class NaiveBayes(nn.Module):
         # Store config/state in buffers
         self.n_classes = torch.tensor(int(n_classes), dtype=torch.long, device=device)
 
-        self.numerical_features = (
-            torch.as_tensor(numerical_features, dtype=torch.long, device=device)
-            if len(numerical_features) > 0
+        self.numerical_features_indexes = (
+            torch.as_tensor(numerical_features_indexes, dtype=torch.long, device=device)
+            if len(numerical_features_indexes) > 0
             else torch.empty(0, dtype=torch.long, device=device)
         )
 
-        self.categorical_features = (
-            torch.as_tensor(categorical_features, dtype=torch.long, device=device)
-            if len(categorical_features) > 0
+        self.categorical_features_indexes = (
+            torch.as_tensor(categorical_features_indexes, dtype=torch.long, device=device)
+            if len(categorical_features_indexes) > 0
             else torch.empty(0, dtype=torch.long, device=device)
         )
 
@@ -104,8 +105,8 @@ class NaiveBayes(nn.Module):
             self.weights = torch.as_tensor(weights, dtype=torch.float32, device=device)
 
         n_cls = int(self.n_classes.item())
-        n_num = int(self.numerical_features.numel())
-        n_cat = int(self.categorical_features.numel())
+        n_num = int(self.numerical_features_indexes.numel())
+        n_cat = int(self.categorical_features_indexes.numel())
 
         # Initialize and estimate numerical stats
         if n_num > 0:
@@ -113,7 +114,7 @@ class NaiveBayes(nn.Module):
             self.variances = torch.zeros(
                 (n_cls, n_num), dtype=torch.float32, device=device
             )
-            self.estimate_mean_var(metadata[:, self.numerical_features], labels)
+            self.estimate_mean_var(metadata[:, self.numerical_features_indexes], labels)
         else:
             self.means = torch.empty(0, 0, dtype=torch.float32, device=device)
             self.variances = torch.empty(0, 0, dtype=torch.float32, device=device)
@@ -124,7 +125,7 @@ class NaiveBayes(nn.Module):
                 (n_cls, n_cat), dtype=torch.float32, device=device
             )
             self.fill_log_frequency_table(
-                metadata[:, self.categorical_features], labels
+                metadata[:, self.categorical_features_indexes], labels
             )
         else:
             self.log_frequency_table = torch.empty(
@@ -166,10 +167,10 @@ class NaiveBayes(nn.Module):
             raise RuntimeError("The Naive Bayes was not fit.")
 
         nb_log = None
-        if self.numerical_features.numel() > 0:
+        if self.numerical_features_indexes.numel() > 0:
             nb_log = self.get_numerical_features_log_probs(meta)
 
-        if self.categorical_features.numel() > 0:
+        if self.categorical_features_indexes.numel() > 0:
             if nb_log is not None:
                 nb_log += self.get_categorical_features_log_probs(meta)
             else:
@@ -188,13 +189,13 @@ class NaiveBayes(nn.Module):
         log_probs = (
             normalization_term
             - 0.5
-            * (batch[:, self.numerical_features].unsqueeze(dim=1) - self.means) ** 2
+            * (batch[:, self.numerical_features_indexes].unsqueeze(dim=1) - self.means) ** 2
             / self.variances
         )
 
         # sum the log probs from features that are not NaN
         # this effectively ignores missing features in the product of probabilities,
-        mask = ~torch.isnan(batch[:, self.numerical_features])
+        mask = ~torch.isnan(batch[:, self.numerical_features_indexes])
         mask_expanded = mask.unsqueeze(1).expand(-1, log_probs.size(1), -1)
         return (
             torch.where(mask_expanded, log_probs, torch.zeros_like(log_probs))
@@ -204,6 +205,6 @@ class NaiveBayes(nn.Module):
 
     def get_categorical_features_log_probs(self, batch: torch.Tensor):
         return torch.matmul(
-            (batch[:, self.categorical_features] == 1).float(),
+            (batch[:, self.categorical_features_indexes] == 1).float(),
             self.log_frequency_table.t(),
         )

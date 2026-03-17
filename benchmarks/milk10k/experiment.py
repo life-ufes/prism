@@ -210,11 +210,11 @@ def main(
         model.fit(
             torch.Tensor(train_meta.values),
             labels=train[MILK10K.TARGET_NUMBER_COLUMN].values,
-            categorical_features=[
+            categorical_features_indexes=[
                 list(train_meta.columns).index(x)
                 for x in _naive_bayes_categorical_features
             ],
-            numerical_features=[
+            numerical_features_indexes=[
                 list(train_meta.columns).index(x)
                 for x in _naive_bayes_numerical_features
             ],

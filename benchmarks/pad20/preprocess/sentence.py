@@ -5,30 +5,7 @@ import pandas as pd
 from benchmarks.pad20.dataset import PAD20
 from sklearn.model_selection import StratifiedGroupKFold
 
-FIELD_TO_LABEL = {
-    "age": "Age",
-    "gender": "Gender",
-    "background_mother": "Maternal ancestry",
-    "background_father": "Paternal ancestry",
-    "has_piped_water": "Access to piped water",
-    "has_sewage_system": "Access to sewer system",
-    "drink": "Drink",
-    "smoke": "Smoke",
-    "pesticide": "Pesticide exposure",
-    "fitspatrick": "Fitzpatrick scale",
-    "skin_cancer_history": "Family skin cancer history",
-    "cancer_history": "Family any cancer history",
-    "region": "Lesion region",
-    "grew": "Lesion grew",
-    "itch": "Lesion itch",
-    "bleed": "Lesion bled",
-    "hurt": "Lesion hurt",
-    "changed": "Lesion changed",
-    "elevation": "Lesion elevation",
-    "diameter_1": "First diameter (mm)",
-    "diameter_2": "Second diameter (mm)",
-}
-
+from utils.names import FIELD_TO_LABEL
 
 def generate_sentence(df: pd.DataFrame) -> pd.DataFrame:
     df["age"] = df["age"].apply(lambda x: int(x) if pd.notna(x) else "unknown")

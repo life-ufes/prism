@@ -15,7 +15,7 @@ from sklearn.metrics import (
 )
 
 from pathlib import Path
-from utils.names import MODEL_DISPLAY_NAMES
+from utils.names import MODEL_DISPLAY_NAMES, METRIC_NAMES
 from benchmarks.benchmarks import Benchmarks
 from sklearn.metrics import ConfusionMatrixDisplay
 from typing import Dict, Tuple, Union, List, Optional, Sequence
@@ -40,6 +40,7 @@ def compute_metrics_from_csv(
                     Path to the CSV file.
     stage_filter : str
                     Filter rows by stage value before computing metrics (e.g., "val").
+                    
     """
 
     csv_path = Path(csv_path)
@@ -61,6 +62,25 @@ def compute_metrics_from_csv(
             raise ValueError(
                 f"After stage filtering ({stage_filter}), no rows remain in {csv_path}"
             )
+
+    return compute_metrics(df)
+
+def compute_metrics(
+    df: pd.DataFrame,
+) -> Tuple[Dict[str, float], pd.DataFrame, np.ndarray, List[str]]:
+    """
+    Compute multiclass metrics from a DataFrame containing true labels and predicted probabilities.
+
+    Expected Dataframe columns:
+    - labels: true class label names
+    - id: sample identifier
+    - <CLASS COLS...>: one column per class containing predicted probabilities
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+                    DataFrame containing true labels and predicted probabilities.
+    """
 
     # Infer class probability columns: anything that's not labels/id/stage
     non_class_cols = {"labels", "id", "stage"}
@@ -141,7 +161,7 @@ def compute_metrics_from_csv(
         )
         overall["auc_macro"] = float(np.nanmean(per_auc))
     except Exception as e:
-        print(f"Warning: Could not compute AUC for {csv_path}: {e}")
+        print(f"Warning: Could not compute AUC: {e}")
         per_auc = np.full(n_classes, np.nan, dtype=float)
         overall["auc_macro"] = float("nan")
 
@@ -527,14 +547,7 @@ def generate_latex_macro_table(
             "precision_macro",
         ]
 
-    if metric_labels is None:
-        metric_labels = {
-            "balanced_accuracy": "BACC",
-            "f1_macro": "F1-Score",
-            "auc_macro": "AUC",
-            "specificity_macro": "Specificity",
-            "precision_macro": "Precision",
-        }
+    metric_labels = metric_labels if metric_labels else METRIC_NAMES
 
     if method_title_map is None:
         method_title_map = MODEL_DISPLAY_NAMES

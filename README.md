@@ -72,3 +72,34 @@ python -m utils.statistical {pad20|milk10k} -t <timestamp> [--control <method>]
 
 **Options:**
 - `--control`: Specify the control method for comparisons (defaults to `naive_bayes`).
+
+## 6. Incremental Evaluation on PAD-UFES-20
+
+After aggregating the results for all methods under the same `results/{timestamp}` directory, you can run the incremental evaluation:
+
+```bash
+python -m benchmarks.pad20.incremental -t <timestamp>
+```
+
+**Options:**
+- `--metric`: Specifies the metric as either `bacc`, `f1`, `auc`, `sensitivity`, or `precision` (defaults to `bacc`).
+- `--backbone`: Specifies the backbone (defaults to `efficientnet-b0`).
+
+
+
+## Note
+
+Recently, the sentence-transformers changed its API and started to display the following warnings:
+
+```bash
+AlbertModel LOAD REPORT from: sentence-transformers/paraphrase-albert-small-v2
+Key                     | Status     |  |
+------------------------+------------+--+-
+embeddings.position_ids | UNEXPECTED |  |
+
+Notes:
+- UNEXPECTED    :can be ignored when loading from different task/architecture; not ok if you expect identical arch."
+```
+You can safely ignore them: according to this [issue](https://github.com/huggingface/transformers/issues/44493),
+the position_ids were "just an integer range tensor from 0 to the max sequence length. [...] there's not much point in saving this
+in the checkpoints, since it can easily be recomputed on the fly", hence the error.
