@@ -137,7 +137,7 @@ def run_statistical_tests(
     """Loads data once and loops through all requested metrics."""
 
     # Build fold-level metrics
-    folds_df, _, _ = aggregate_results(
+    folds_df, _ = aggregate_results(
         results_root=results_root,
         stage_filter=stage_filter,
         csv_name=csv_name,
