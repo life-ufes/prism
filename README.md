@@ -32,7 +32,7 @@ python -m benchmarks.kfold {pad20|milk10k} [OPTIONS]
 ```
 
 **Options:**
-- `--all`: Runs all methods (`no_metadata`, `cross_attention`, `remixformer`, `metablock`, and `naive_bayes`).
+- `--all`: Runs all baseline methods (`no_metadata`, `cross_attention`, `remixformer`, and `metablock`).
 - `--fusion <method>`: Runs a single, specific fusion method (defaults to `no_metadata`).
 - `--priors <timestamp>`: **Required** if running the `naive_bayes` model. You must provide the timestamp of the results folder from the `no_metadata` baseline.
 
