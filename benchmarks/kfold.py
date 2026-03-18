@@ -5,7 +5,6 @@ from pathlib import Path
 from datetime import datetime
 from sacred.observers import FileStorageObserver
 from benchmarks.benchmarks import BenchmarksFactory, Benchmarks
-from utils.statistical import run_statistical_tests
 from utils.metrics import (
     aggregate_results,
     generate_latex_macro_table
