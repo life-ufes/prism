@@ -12,7 +12,7 @@ from utils.metrics import (
 )
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-ALL_FEATURES_FUSIONS = ["cross_attention", "remixformer", "metablock", "naive_bayes"]
+ALL_FEATURES_FUSIONS = ["cross_attention", "remixformer", "metablock",]
 
 if __name__ == "__main__":
     argparse.ArgumentParser()
