@@ -279,7 +279,7 @@ def main(
 
     # When evaluating the backbone with a Naive Bayes, we don't want to train it,
     # so we set max_epochs to 0 to skip training and only evaluate the backbone on the validation set
-    max_epochs = 0 if _checkpoint_backbone is not None else _epochs
+    max_epochs = 0 if _comb_method == 'naive_bayes' else _epochs
 
     # define a trainer with early stopping based on loss and save the results
     trainer = L.Trainer(
