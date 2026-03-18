@@ -140,14 +140,6 @@ if __name__ == "__main__":
         _results_dir, timestamp_dir=_version, stage_filter="val", save=True
     )
 
-    if args.all:
-        run_statistical_tests(
-            control_method="naive_bayes",
-            results_root=_results_dir,
-            timestamp_dir=_version,
-            stage_filter="val",
-        )
-
     if not overall_agg_df.empty:
         generate_latex_macro_table(
             overall_agg_df,
