@@ -203,6 +203,8 @@ def main(
         comb_method=_comb_method,
         n_metadata=_n_metadata,
         vision_checkpoint=_checkpoint_backbone,
+        n_categorical_metadata=len(_naive_bayes_categorical_features) if _comb_method == "naive_bayes" else None,
+        n_numerical_metadata=len(_naive_bayes_numerical_features) if _comb_method == "naive_bayes" else None,
     )
 
     if _comb_method == "naive_bayes":
