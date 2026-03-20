@@ -25,7 +25,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--fusion",
         type=str,
-        choices=list(ALL_FEATURES_FUSIONS),
+        choices=list(ALL_FEATURES_FUSIONS) + ['naive_bayes'],
         required=False,
         help="Method to combine metadata features",
     )
